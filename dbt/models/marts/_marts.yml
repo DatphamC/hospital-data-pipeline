@@ -1,0 +1,183 @@
+version: 2
+
+models:
+  - name: dim_patient
+    description: >
+      Chiều bệnh nhân cho star schema. Nguồn: `stg_patients`, thêm cột dẫn xuất
+      `full_name` và `age`. Grain: 1 dòng = 1 bệnh nhân.
+      ⚠️ Bảng này còn chứa PII chưa che (email, số điện thoại, địa chỉ, số bảo hiểm) —
+      xem *Known limitations* trong README.
+    columns:
+      - name: patient_id
+        description: "Khóa chính, nối với `fct_*.patient_id`."
+        data_tests: [unique, not_null]
+      - name: first_name
+        description: "Tên bệnh nhân."
+      - name: last_name
+        description: "Họ bệnh nhân."
+      - name: full_name
+        description: "Họ tên đầy đủ, ghép `first_name || ' ' || last_name`."
+      - name: gender
+        description: "Giới tính (`M` / `F`)."
+      - name: date_of_birth
+        description: "Ngày sinh."
+      - name: age
+        description: >
+          Tuổi tính bằng `datediff('year', date_of_birth, current_date())`.
+          ⚠️ Không tái lập được — giá trị thay đổi theo ngày chạy dbt. Nên để tầng BI
+          tự tính từ `date_of_birth`.
+      - name: address
+        description: "Địa chỉ. ⚠️ PII."
+      - name: contact_number
+        description: "Số điện thoại. ⚠️ PII."
+      - name: email
+        description: "Email. ⚠️ PII."
+      - name: insurance_provider
+        description: "Công ty bảo hiểm — dùng để phân tích cơ cấu chi trả."
+      - name: insurance_number
+        description: "Số thẻ bảo hiểm. ⚠️ PII."
+      - name: registration_date
+        description: "Ngày đăng ký lần đầu — dùng cho phân tích cohort."
+
+  - name: dim_doctor
+    description: >
+      Chiều bác sĩ cho star schema. Nguồn: `stg_doctors`, thêm cột dẫn xuất `full_name`.
+      Grain: 1 dòng = 1 bác sĩ.
+    columns:
+      - name: doctor_id
+        description: "Khóa chính, nối với `fct_appointments.doctor_id` / `fct_treatments.doctor_id`."
+        data_tests: [unique, not_null]
+      - name: first_name
+        description: "Tên bác sĩ."
+      - name: last_name
+        description: "Họ bác sĩ."
+      - name: full_name
+        description: "Họ tên đầy đủ, ghép `first_name || ' ' || last_name`."
+      - name: specialization
+        description: "Chuyên khoa — chiều phân tích chính theo khoa."
+      - name: hospital_branch
+        description: "Chi nhánh bệnh viện — chiều phân tích theo cơ sở."
+      - name: years_experience
+        description: "Số năm kinh nghiệm."
+      - name: phone_number
+        description: "Số điện thoại liên hệ."
+      - name: email
+        description: "Email công việc."
+
+  - name: dim_date
+    description: >
+      Chiều thời gian, sinh động theo khoảng min/max thực tế của dữ liệu
+      (`stg_appointments`, `stg_treatments`, `stg_billing`, `stg_patients`).
+      Grain: 1 dòng = 1 ngày, liên tục không đứt quãng.
+      ⚠️ Spine đang hard-code `generator(rowcount => 5000)` — xem *Known limitations*.
+    columns:
+      - name: date_key
+        description: "Khóa chính (`date`). Nối với `fct_*.date_key`."
+        data_tests: [unique, not_null]
+      - name: year
+        description: "Năm (số nguyên, vd 2023)."
+      - name: quarter
+        description: "Quý trong năm (1–4)."
+      - name: month
+        description: "Tháng trong năm (1–12)."
+      - name: month_name
+        description: "Tên tháng viết tắt tiếng Anh (Jan, Feb, ...)."
+      - name: day_of_month
+        description: "Ngày trong tháng (1–31)."
+      - name: day_of_week
+        description: "Thứ trong tuần theo Snowflake (0 = Chủ nhật … 6 = Thứ bảy)."
+      - name: day_name
+        description: "Tên thứ viết tắt tiếng Anh (Mon, Tue, ...)."
+      - name: week_of_year
+        description: "Tuần thứ mấy trong năm (1–53)."
+      - name: is_weekend
+        description: "`true` nếu là Thứ bảy hoặc Chủ nhật."
+
+  - name: fct_appointments
+    description: >
+      Bảng fact lịch hẹn. Nguồn: `stg_appointments`, thêm các cờ đo lường để BI
+      cộng trực tiếp không cần viết DAX. Grain: 1 dòng = 1 lịch hẹn.
+    columns:
+      - name: appointment_id
+        description: "Khóa chính (degenerate dimension)."
+        data_tests: [unique, not_null]
+      - name: patient_id
+        description: "Khóa ngoại tới `dim_patient`."
+        data_tests:
+          - relationships:
+              to: ref('dim_patient')
+              field: patient_id
+      - name: doctor_id
+        description: "Khóa ngoại tới `dim_doctor`."
+        data_tests:
+          - relationships:
+              to: ref('dim_doctor')
+              field: doctor_id
+      - name: date_key
+        description: "Khóa ngoại tới `dim_date` (chính là `appointment_date`)."
+      - name: appointment_time
+        description: "Giờ hẹn khám."
+      - name: reason_for_visit
+        description: "Lý do khám (degenerate dimension)."
+      - name: status
+        description: "Trạng thái: Scheduled / Completed / Cancelled / No-show."
+      - name: is_completed
+        description: "Cờ 1/0 — bằng 1 khi `status = 'Completed'`. Sum để ra số ca hoàn thành."
+      - name: is_no_show
+        description: "Cờ 1/0 — bằng 1 khi `status = 'No-show'`. Sum/count để ra tỷ lệ no-show."
+      - name: is_cancelled
+        description: "Cờ 1/0 — bằng 1 khi `status = 'Cancelled'`. Sum/count để ra tỷ lệ hủy."
+      - name: appointment_count
+        description: "Hằng số 1 — cột đếm để BI sum ra tổng lượt hẹn."
+
+  - name: fct_treatments
+    description: >
+      Bảng fact điều trị. Nguồn: `stg_treatments`, left join `stg_appointments`
+      để kéo sẵn `patient_id` / `doctor_id` phục vụ phân tích theo bệnh nhân và bác sĩ.
+      Grain: 1 dòng = 1 lần điều trị.
+    columns:
+      - name: treatment_id
+        description: "Khóa chính (degenerate dimension)."
+        data_tests: [unique, not_null]
+      - name: appointment_id
+        description: "Lịch hẹn phát sinh lần điều trị này."
+      - name: patient_id
+        description: "Khóa ngoại tới `dim_patient`, lấy qua appointment."
+      - name: doctor_id
+        description: "Khóa ngoại tới `dim_doctor`, lấy qua appointment."
+      - name: date_key
+        description: "Khóa ngoại tới `dim_date` (chính là `treatment_date`)."
+      - name: treatment_type
+        description: "Loại điều trị — chiều phân tích chính của bảng fact này."
+      - name: description
+        description: "Mô tả ngắn nội dung điều trị."
+      - name: cost
+        description: "Chi phí điều trị — measure cộng được (additive)."
+
+  - name: fct_billing
+    description: >
+      Bảng fact hóa đơn. Nguồn: `stg_billing`, tách sẵn số tiền theo từng trạng thái
+      thanh toán để BI dựng KPI doanh thu / công nợ. Grain: 1 dòng = 1 hóa đơn.
+      ⚠️ Bao gồm cả hóa đơn của ca Cancelled/No-show — xem *Known limitations*.
+    columns:
+      - name: bill_id
+        description: "Khóa chính (degenerate dimension)."
+        data_tests: [unique, not_null]
+      - name: patient_id
+        description: "Khóa ngoại tới `dim_patient`."
+      - name: treatment_id
+        description: "Khóa ngoại tới `fct_treatments.treatment_id`."
+      - name: date_key
+        description: "Khóa ngoại tới `dim_date` (chính là `bill_date`)."
+      - name: amount
+        description: "Tổng tiền hóa đơn — measure cộng được."
+      - name: payment_method
+        description: "Hình thức thanh toán: Credit Card / Insurance / Cash."
+      - name: payment_status
+        description: "Trạng thái thanh toán: Paid / Pending / Failed."
+      - name: amount_paid
+        description: "Bằng `amount` khi đã thanh toán, ngược lại 0. Sum để ra doanh thu thực thu."
+      - name: amount_pending
+        description: "Bằng `amount` khi đang chờ thanh toán, ngược lại 0. Sum để ra công nợ."
+      - name: amount_failed
+        description: "Bằng `amount` khi thanh toán thất bại, ngược lại 0. Sum để ra tiền thất thoát."

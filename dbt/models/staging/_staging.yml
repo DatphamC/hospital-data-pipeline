@@ -1,0 +1,148 @@
+version: 2
+
+models:
+  - name: stg_patients
+    description: >
+      Bệnh nhân đã làm sạch từ `raw.raw_patients`. Trim khoảng trắng, chuẩn hóa
+      hoa/thường cho tên và email, ép kiểu ngày tháng. Khử trùng lặp theo
+      `patient_id`, giữ bản ghi có `_loaded_at` mới nhất. Grain: 1 dòng = 1 bệnh nhân.
+    columns:
+      - name: patient_id
+        description: "Khóa chính. Định danh bệnh nhân (vd `P001`)."
+        data_tests: [unique, not_null]
+      - name: first_name
+        description: "Tên, đã chuẩn hóa về dạng Initcap."
+      - name: last_name
+        description: "Họ, đã chuẩn hóa về dạng Initcap."
+      - name: gender
+        description: "Giới tính, viết hoa (`M` / `F`)."
+      - name: date_of_birth
+        description: "Ngày sinh (`date`). Dùng để tính tuổi ở tầng marts."
+      - name: contact_number
+        description: "Số điện thoại liên hệ. ⚠️ PII — cần masking policy khi lên production."
+      - name: address
+        description: "Địa chỉ. ⚠️ PII — cần masking policy khi lên production."
+      - name: registration_date
+        description: "Ngày bệnh nhân đăng ký lần đầu (`date`)."
+      - name: insurance_provider
+        description: "Tên công ty bảo hiểm."
+      - name: insurance_number
+        description: "Số thẻ bảo hiểm. ⚠️ PII — cần masking policy khi lên production."
+      - name: email
+        description: "Email, đã đưa về chữ thường. ⚠️ PII — cần masking policy khi lên production."
+
+  - name: stg_doctors
+    description: >
+      Bác sĩ đã làm sạch từ `raw.raw_doctors`. Trim, chuẩn hóa Initcap cho tên,
+      ép `years_experience` về số. Khử trùng lặp theo `doctor_id` (giữ bản mới nhất).
+      Grain: 1 dòng = 1 bác sĩ.
+    columns:
+      - name: doctor_id
+        description: "Khóa chính. Định danh bác sĩ (vd `D001`)."
+        data_tests: [unique, not_null]
+      - name: first_name
+        description: "Tên bác sĩ, dạng Initcap."
+      - name: last_name
+        description: "Họ bác sĩ, dạng Initcap."
+      - name: specialization
+        description: "Chuyên khoa (vd Dermatology, Cardiology)."
+      - name: phone_number
+        description: "Số điện thoại liên hệ."
+      - name: years_experience
+        description: "Số năm kinh nghiệm (`number`)."
+      - name: hospital_branch
+        description: "Chi nhánh bệnh viện nơi bác sĩ làm việc."
+      - name: email
+        description: "Email công việc, đã đưa về chữ thường."
+
+  - name: stg_appointments
+    description: >
+      Lịch hẹn đã làm sạch từ `raw.raw_appointments`. Ép `appointment_date` về `date`
+      và `appointment_time` về `time`. Khử trùng lặp theo `appointment_id`
+      (giữ bản mới nhất). Grain: 1 dòng = 1 lịch hẹn.
+    columns:
+      - name: appointment_id
+        description: "Khóa chính. Định danh lịch hẹn (vd `A001`)."
+        data_tests: [unique, not_null]
+      - name: patient_id
+        description: "Khóa ngoại tới `stg_patients.patient_id`."
+        data_tests:
+          - relationships:
+              to: ref('stg_patients')
+              field: patient_id
+      - name: doctor_id
+        description: "Khóa ngoại tới `stg_doctors.doctor_id`."
+        data_tests:
+          - relationships:
+              to: ref('stg_doctors')
+              field: doctor_id
+      - name: appointment_date
+        description: "Ngày hẹn khám (`date`)."
+      - name: appointment_time
+        description: "Giờ hẹn khám (`time`)."
+      - name: reason_for_visit
+        description: "Lý do khám do lễ tân nhập (vd Therapy, Consultation)."
+      - name: status
+        description: >
+          Trạng thái lịch hẹn. ⚠️ Trong bộ dữ liệu synthetic này, cả ca `Cancelled`
+          lẫn `No-show` vẫn phát sinh treatment + billing — xem mục
+          *Known limitations* trong README.
+        data_tests:
+          - accepted_values:
+              values: ["Scheduled", "Completed", "Cancelled", "No-show"]
+
+  - name: stg_treatments
+    description: >
+      Lần điều trị đã làm sạch từ `raw.raw_treatments`. Ép `cost` về `decimal(12,2)`
+      và `treatment_date` về `date`. Khử trùng lặp theo `treatment_id`
+      (giữ bản mới nhất). Grain: 1 dòng = 1 lần điều trị.
+    columns:
+      - name: treatment_id
+        description: "Khóa chính. Định danh lần điều trị (vd `T001`)."
+        data_tests: [unique, not_null]
+      - name: appointment_id
+        description: "Khóa ngoại tới `stg_appointments.appointment_id`. Hiện là quan hệ 1-1."
+        data_tests:
+          - relationships:
+              to: ref('stg_appointments')
+              field: appointment_id
+      - name: treatment_type
+        description: "Loại điều trị (Chemotherapy, X-Ray, ECG, MRI, Physiotherapy)."
+      - name: description
+        description: "Mô tả ngắn nội dung điều trị."
+      - name: cost
+        description: "Chi phí điều trị, `decimal(12,2)`."
+      - name: treatment_date
+        description: "Ngày thực hiện điều trị (`date`)."
+
+  - name: stg_billing
+    description: >
+      Hóa đơn đã làm sạch từ `raw.raw_billing`. Ép `amount` về `decimal(12,2)`
+      và `bill_date` về `date`. Khử trùng lặp theo `bill_id` (giữ bản mới nhất).
+      Grain: 1 dòng = 1 hóa đơn.
+    columns:
+      - name: bill_id
+        description: "Khóa chính. Định danh hóa đơn (vd `B001`)."
+        data_tests: [unique, not_null]
+      - name: patient_id
+        description: "Khóa ngoại tới bệnh nhân được xuất hóa đơn."
+      - name: treatment_id
+        description: "Khóa ngoại tới `stg_treatments.treatment_id`. Hiện là quan hệ 1-1."
+        data_tests:
+          - relationships:
+              to: ref('stg_treatments')
+              field: treatment_id
+      - name: bill_date
+        description: "Ngày xuất hóa đơn (`date`)."
+      - name: amount
+        description: "Số tiền trên hóa đơn, `decimal(12,2)`."
+      - name: payment_method
+        description: "Hình thức thanh toán."
+        data_tests:
+          - accepted_values:
+              values: ["Credit Card", "Insurance", "Cash"]
+      - name: payment_status
+        description: "Trạng thái thanh toán. `Pending` + `Failed` được coi là công nợ."
+        data_tests:
+          - accepted_values:
+              values: ["Paid", "Pending", "Failed"]
