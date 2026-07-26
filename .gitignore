@@ -1,0 +1,28 @@
+# Secrets
+.env
+dbt/profiles.yml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+dbt/package-lock.yml
+
+# Logs
+logs/*.log
+
+# Power BI temp
+*.pbix.tmp
+
+# Editor / tooling
+.claude/
+
+# OS
+.DS_Store

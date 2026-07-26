@@ -1,0 +1,18 @@
+[project]
+name = "hospital-data-pipeline"
+version = "1.0.0"
+description = "Hospital data pipeline: CSV -> Snowflake (RAW/STAGING/ANALYTICS) -> dbt -> Power BI"
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "snowflake-connector-python[pandas]==3.12.3",
+    "pandas==2.2.3",
+    "python-dotenv==1.0.1",
+    "dbt-core==1.8.7",
+    "dbt-snowflake==1.8.4",
+    "pyopenssl>=24.0.0",
+]
+
+# uv quản lý môi trường ảo trong .venv/ và khóa phiên bản trong uv.lock
+[tool.uv]
+# (để mặc định là đủ; có thể thêm dev-dependencies sau nếu cần)
