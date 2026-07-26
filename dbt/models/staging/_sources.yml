@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: raw
+    database: HOSPITAL
+    schema: RAW
+    description: >
+      Tầng RAW — dữ liệu thô nạp từ `data/*.csv` bằng `ingestion/load_to_raw.py`
+      (full refresh mỗi lần chạy). Mọi cột giữ nguyên dạng text, không ép kiểu;
+      việc làm sạch để tầng STAGING lo. Mỗi bảng có thêm 2 cột metadata:
+      `_loaded_at` (thời điểm nạp, UTC ISO-8601) và `_source_file` (tên file CSV gốc).
+    tables:
+      - name: raw_patients
+        description: "Thô từ `patients.csv` — 50 bệnh nhân. Khóa: `patient_id`."
+      - name: raw_doctors
+        description: "Thô từ `doctors.csv` — 10 bác sĩ. Khóa: `doctor_id`."
+      - name: raw_appointments
+        description: "Thô từ `appointments.csv` — 200 lịch hẹn. Khóa: `appointment_id`."
+      - name: raw_treatments
+        description: "Thô từ `treatments.csv` — 200 lần điều trị. Khóa: `treatment_id`."
+      - name: raw_billing
+        description: "Thô từ `billing.csv` — 200 hóa đơn. Khóa: `bill_id`."

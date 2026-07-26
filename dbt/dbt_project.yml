@@ -1,0 +1,16 @@
+name: "hospital"
+version: "1.0.0"
+config-version: 2
+
+profile: "hospital"
+
+model-paths: ["models"]
+
+models:
+  hospital:
+    staging:
+      +materialized: view
+      +schema: STAGING
+    marts:
+      +materialized: table
+      +schema: ANALYTICS

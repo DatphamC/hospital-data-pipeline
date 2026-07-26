@@ -1,0 +1,15 @@
+# Copy file này thành ~/.dbt/profiles.yml (hoặc dbt/profiles.yml) rồi điền thông tin.
+# Giá trị phải khớp với .env của ingestion.
+hospital:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'DBT_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'HOSPITAL_WH') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'HOSPITAL') }}"
+      schema: STAGING
+      threads: 4
