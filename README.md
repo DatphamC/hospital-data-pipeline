@@ -99,7 +99,8 @@ https://datphamc.github.io/hospital-data-pipeline/dbt-docs/
 | `treatments` | 200 |
 | `billing` | 200 |
 
-- Khoảng thời gian: **2021-01-23 → 2023-12-30**
+- Kỳ giao dịch (hẹn / điều trị / hóa đơn): **2023-01-01 → 2023-12-30** — toàn bộ nằm trong 1 năm
+- Ngày đăng ký bệnh nhân trải từ **2021-01-23**, nên `dim_date` phủ **2021-01-23 → 2023-12-30**
 - Chất lượng: **0 ô trống**, **0 dòng mồ côi (orphan)** giữa cả 5 bảng
 - Quan hệ: mỗi appointment có đúng 1 treatment và 1 bill
 
@@ -214,3 +215,24 @@ Connect → Snowflake → database `HOSPITAL`, schema `ANALYTICS` → import cá
 - `.env` và `dbt/profiles.yml` chứa secret → **không commit** (đã có trong `.gitignore`).
 - Toàn bộ dữ liệu trong `data/` là **synthetic**, không phải dữ liệu bệnh nhân thật.
 - Nếu dùng dữ liệu thật, hãy ẩn danh các cột nhạy cảm trước khi public.
+
+---
+
+## Lí do làm dự án
+
+Tôi muốn tự làm hết quy trình phân tích dữ liệu đầu cuối cho dữ liệu vận hành bệnh viện thay vì chỉ đọc lý thuyết.
+
+Trong quá trình khám phá dữ liệu, dựng star schema, tôi đã phát hiện 26% lịch hẹn No-show vẫn có hóa đơn kèm theo — dữ liệu qua hết 28 test nhưng vẫn sai về mặt nghiệp vụ. Một lỗi nữa là do chính tôi: `dim_patient.age` tính bằng `current_date()`, chạy lại hôm sau thấy số đổi mới nhận ra nó không tái lập được (đã ghi ở mục Known limitations phía trên). Chuyện đó cho thấy `not_null` và `unique` chỉ kiểm được cấu trúc; còn số có nghĩa hay không thì phải tự ngồi đối chiếu.
+
+## Khám phá dữ liệu và khuyến nghị
+
+Sau khi dựng xong star schema, tôi tiếp tục dựng dashboard Power BI (6 tab: Tổng Quan, Tài Chính, Vận Hành, Lâm Sàng, Bệnh Nhân, Khuyến Nghị) và quy về 4 nhóm hành động:
+
+| Lĩnh vực | Vấn đề (từ dữ liệu) | Hành động đề xuất |
+|---|---|---|
+| **Thu tiền / AR** | Chỉ **31.5%** số tiền xuất hóa đơn được thu về; $193,213 Failed và $184,612 Pending trên tổng $551,250 | Quản lý toàn bộ vòng đời doanh thu (Revenue Cycle Management): xác thực bảo hiểm trước khi cung cấp dịch vụ, retry thanh toán Failed, nhắc nợ Pending tự động |
+| **Vận hành / No-show** | No-show **26%** cộng hủy lịch **25.5%** — hơn một nửa công suất đặt trước bị bỏ phí | Nhắc lịch qua SMS hoặc gọi điện 48h trước; đặt cọc hoặc overbooking có kiểm soát cho khung giờ cao điểm giữa tuần |
+| **Tăng trưởng doanh thu** | Doanh thu giảm **57.1%** so với đỉnh; nửa cuối năm thấp hơn nửa đầu **23.7%** | Đẩy volume dịch vụ chủ lực (Chemotherapy — loại điều trị nhiều nhất, 49/200 ca), lấp slot trống, chiến dịch thu hút bệnh nhân mới |
+| **Rủi ro tập trung** | Top 10 bệnh nhân chiếm **36.7%** doanh thu; một chi nhánh chiếm **41.5%** | Đa dạng hóa nguồn bệnh nhân và chi nhánh; theo dõi sát nhóm bệnh nhân giá trị cao vì mất một người là mất đáng kể |
+
+> ⚠️ Dữ liệu là **synthetic sinh ngẫu nhiên**, nên các con số trên minh họa **cách đọc số và chuyển thành hành động**, không phản ánh một bệnh viện có thật. Ví dụ tỷ lệ thanh toán thất bại 35% là hệ quả của việc bộ sinh dữ liệu chia gần đều 3 trạng thái thanh toán, chứ không phải một hiện tượng nghiệp vụ.
