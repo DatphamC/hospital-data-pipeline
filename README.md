@@ -200,6 +200,10 @@ Connect → Snowflake → database `HOSPITAL`, schema `ANALYTICS` → import cá
 - **Dữ liệu synthetic:** 26% No-show và 25.5% Cancelled vẫn có điều trị + hóa đơn
   đi kèm, nên KPI doanh thu chỉ mang tính minh họa. Production cần lọc
   `status = 'Completed'` trước khi tính doanh thu.
+- **Chỉ số bình quân theo bệnh nhân dễ sai mẫu số:** filter context lan từ dimension
+  xuống fact chứ không ngược lại, nên mọi measure chia theo bệnh nhân phải đếm
+  `DISTINCTCOUNT(FCT_BILLING[patient_id])`, không phải `DIM_PATIENT`. Đã phát hiện và
+  sửa — chẩn đoán đầy đủ ở [issue #1](https://github.com/DatphamC/hospital-data-pipeline/issues/1).
 - **PII chưa che:** `dim_patient` còn chứa email / số điện thoại / địa chỉ / số bảo hiểm
   → cần áp Snowflake masking policy trước khi mở cho người dùng cuối.
 - **`dim_patient.age` không tái lập được:** đang tính bằng `current_date()` nên kết quả
